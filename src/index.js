@@ -1,6 +1,9 @@
 require("dotenv").config();
 const express = require("express");
-const { Bot, InlineKeyboard } = require("grammy");
+const fs = require("node:fs");
+const path = require("node:path");
+const { Bot, InlineKeyboard, InputFile } = require("grammy");
+const { getDailyContent, buildImagePrompt, isValidTime, getBakuDateTime } = require("./automation");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -18,6 +21,89 @@ const adminIds = new Set(
     .filter(Boolean)
 );
 const recentMessages = new Map();
+const settingsPath = path.join(process.cwd(), "data", "automation-settings.json");
+const defaultSettings = {
+  enabled: false,
+  chatId: null,
+  time: process.env.AUTO_POST_TIME || "10:00",
+  lastPostedDate: null
+};
+let settings = { ...defaultSettings };
+let postingNow = false;
+
+function isAdmin(ctx) {
+  return Boolean(ctx.from?.id && adminIds.has(String(ctx.from.id)));
+}
+
+async function requireAdmin(ctx) {
+  if (isAdmin(ctx)) return true;
+  await ctx.reply("⛔ Bu özellik yalnızca VYRA yöneticilerine açıktır.");
+  return false;
+}
+
+function loadSettings() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+    settings = {
+      ...defaultSettings,
+      ...saved,
+      time: isValidTime(saved.time) ? saved.time : defaultSettings.time
+    };
+  } catch (_) {
+    settings = { ...defaultSettings };
+  }
+}
+
+function saveSettings() {
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
+}
+
+async function generateImageBuffer(prompt) {
+  const apiKey = process.env.POLLINATIONS_API_KEY;
+  if (!apiKey) {
+    throw new Error("Görsel servisi henüz yapılandırılmamış. POLLINATIONS_API_KEY anahtarını barındırma servisinin Environment/Secrets bölümüne ekleyin.");
+  }
+  const url = new URL("https://gen.pollinations.ai/image/" + encodeURIComponent(prompt));
+  url.searchParams.set("model", process.env.POLLINATIONS_IMAGE_MODEL || "flux");
+  url.searchParams.set("width", "1024");
+  url.searchParams.set("height", "1024");
+  url.searchParams.set("nologo", "true");
+  const response = await fetch(url, {
+    headers: { Authorization: "Bearer " + apiKey },
+    signal: AbortSignal.timeout(90000)
+  });
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    throw new Error("Görsel servisi HTTP " + response.status + (detail ? ": " + detail : ""));
+  }
+  const type = response.headers.get("content-type") || "";
+  if (!type.startsWith("image/")) throw new Error("Görsel servisi bir resim döndürmedi.");
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (!buffer.length) throw new Error("Görsel servisi boş dosya döndürdü.");
+  return buffer;
+}
+
+async function sendImage(chatId, prompt, caption) {
+  const image = await generateImageBuffer(prompt);
+  await bot.api.sendPhoto(chatId, new InputFile(image, "vyra-ai-image.jpg"), {
+    caption: String(caption || "💜 VYRA • AI Görseli").slice(0, 1000)
+  });
+}
+
+async function sendDailyPost(chatId) {
+  const content = getDailyContent(new Date());
+  const caption = content.caption.replace(/\*\*/g, "");
+  try {
+    await sendImage(chatId, buildImagePrompt(content.visual), caption);
+    return { image: true, topic: content.topic };
+  } catch (error) {
+    console.error("Daily image generation failed:", error.message || error);
+    // Keep the scheduled community post useful even when the image provider is temporarily unavailable.
+    await bot.api.sendMessage(chatId, caption + "\n\n🎨 Görsel şu an üretilemedi; sonraki paylaşımda tekrar denenecek.");
+    return { image: false, topic: content.topic, error };
+  }
+}
 
 const menuKeyboard = new InlineKeyboard()
   .text("📚 Komutlar", "menu:help")
@@ -41,11 +127,17 @@ const commandList = [
   { command: "rules", description: "Topluluk kurallarını gör" },
   { command: "id", description: "Telegram kullanıcı ve sohbet kimliğini gör" },
   { command: "ping", description: "Bot bağlantısını kontrol et" },
+  { command: "image", description: "Yönetici: AI görseli oluştur" },
+  { command: "autopost_on", description: "Yönetici: günlük paylaşımı aç ve bu grubu seç" },
+  { command: "autopost_off", description: "Yönetici: günlük paylaşımı durdur" },
+  { command: "autopost_status", description: "Yönetici: paylaşım durumunu gör" },
+  { command: "autopost_time", description: "Yönetici: saat ayarla, ör. /autopost_time 10:30" },
+  { command: "autopost_test", description: "Yönetici: test paylaşımı gönder" },
   { command: "announce", description: "Yönetici duyurusu gönder" }
 ];
 
 app.get("/", (_req, res) => res.status(200).send("💜 VYRA Telegram Bot is running."));
-app.get("/health", (_req, res) => res.status(200).json({ ok: true, bot: "VYRA Telegram Bot" }));
+app.get("/health", (_req, res) => res.status(200).json({ ok: true, bot: "VYRA Telegram Bot", automation: settings.enabled ? "enabled" : "disabled" }));
 app.listen(port, "0.0.0.0", () => console.log("Health server listening on " + port));
 
 bot.command("start", async (ctx) => {
@@ -62,14 +154,14 @@ bot.command("start", async (ctx) => {
 bot.command("help", async (ctx) => {
   await ctx.reply(
     "📚 VYRA • KOMUT MERKEZİ\n\n" +
-    "/start — Ana menüyü aç\n" +
-    "/help — Bu yardım ekranı\n" +
-    "/about — VYRA hakkında\n" +
-    "/rules — Topluluk kuralları\n" +
-    "/id — Kullanıcı ve sohbet kimliğin\n" +
-    "/ping — Bot bağlantısını test et\n\n" +
-    "🛡️ Yönetici: /announce mesajın\n" +
-    "Düğmeleri kullanarak da menüler arasında gezebilirsin.",
+    "/start — Ana menü\n/help — Yardım\n/about — VYRA hakkında\n/rules — Kurallar\n/id — Kimlik bilgileri\n/ping — Bağlantı testi\n\n" +
+    "🎨 /image açıklama — Yönetici AI görseli\n" +
+    "📅 /autopost_on — Bu grupta günlük paylaşımı aç\n" +
+    "/autopost_off — Otomatik paylaşımı durdur\n" +
+    "/autopost_status — Durumu kontrol et\n" +
+    "/autopost_time 10:30 — Paylaşım saatini ayarla\n" +
+    "/autopost_test — Test paylaşımı gönder\n\n" +
+    "🛡️ Yönetici: /announce mesajın",
     { reply_markup: menuKeyboard }
   );
 });
@@ -86,12 +178,9 @@ bot.command("about", async (ctx) => {
 bot.command("rules", async (ctx) => {
   await ctx.reply(
     "🛡️ VYRA TOPLULUK KURALLARI\n\n" +
-    "1. Herkese saygılı davran.\n" +
-    "2. Spam, flood ve istenmeyen reklam yapma.\n" +
-    "3. Kişisel bilgilerini veya gizli anahtarlarını paylaşma.\n" +
-    "4. Zararlı bağlantılara ve şüpheli dosyalara dikkat et.\n" +
-    "5. Yönetici kararlarına ve Telegram kurallarına uy.\n\n" +
-    "💜 Birlikte daha iyi bir topluluk oluşturabiliriz."
+    "1. Herkese saygılı davran.\n2. Spam, flood ve istenmeyen reklam yapma.\n" +
+    "3. Kişisel bilgilerini veya gizli anahtarlarını paylaşma.\n4. Zararlı bağlantılara ve şüpheli dosyalara dikkat et.\n" +
+    "5. Yönetici kararlarına ve Telegram kurallarına uy.\n\n💜 Birlikte daha iyi bir topluluk oluşturabiliriz."
   );
 });
 
@@ -130,10 +219,83 @@ bot.callbackQuery("menu:rules", async (ctx) => {
   await ctx.reply("🛡️ Saygılı ol, spam yapma, gizli bilgilerini paylaşma ve şüpheli bağlantılara dikkat et. 💜");
 });
 
-bot.command("announce", async (ctx) => {
-  if (!adminIds.has(String(ctx.from?.id))) {
-    return ctx.reply("⛔ Bu komut yalnızca yetkili VYRA yöneticileri içindir.");
+bot.command("image", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  const prompt = String(ctx.match || "").trim().slice(0, 500);
+  if (!prompt) return ctx.reply("Kullanım: /image mor neon teknoloji temalı bir VYRA görseli");
+  await ctx.reply("🎨 Görsel hazırlanıyor. Bu işlem biraz sürebilir...");
+  try {
+    await sendImage(ctx.chat.id, buildImagePrompt(prompt), "💜 VYRA • AI Görseli\n" + prompt.slice(0, 500));
+  } catch (error) {
+    console.error("Manual image generation failed:", error.message || error);
+    await ctx.reply("❌ Görsel oluşturulamadı.\n" + (error.message || "Bilinmeyen hata"));
   }
+});
+
+bot.command("autopost_on", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  if (ctx.chat.type === "private") {
+    return ctx.reply("Önce VYRA grubunda bu komutu gönder. Bot o grubu günlük paylaşım hedefi olarak kaydedecek.");
+  }
+  settings.chatId = ctx.chat.id;
+  settings.enabled = true;
+  saveSettings();
+  await ctx.reply(
+    "💜 Günlük otomatik paylaşım AÇIK!\n\n" +
+    "🎨 İçerik: teknoloji, yapay zekâ, dijital ipuçları ve VYRA\n" +
+    "🕒 Saat: " + settings.time + " (Bakü saati)\n" +
+    "📍 Bu grup hedef olarak kaydedildi.\n\n" +
+    "Test için /autopost_test yaz."
+  );
+});
+
+bot.command("autopost_off", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  settings.enabled = false;
+  saveSettings();
+  await ctx.reply("⏸️ Günlük otomatik paylaşım durduruldu. Ayarlar korunuyor; tekrar açmak için grupta /autopost_on yaz.");
+});
+
+bot.command("autopost_status", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  const target = settings.chatId === null ? "Henüz grup seçilmedi" : String(settings.chatId);
+  const last = settings.lastPostedDate || "Henüz paylaşım yapılmadı";
+  await ctx.reply(
+    "📅 VYRA • OTOMATİK PAYLAŞIM\n\n" +
+    "Durum: " + (settings.enabled ? "🟢 Açık" : "⚪ Kapalı") + "\n" +
+    "Saat: " + settings.time + " (Bakü saati)\n" +
+    "Hedef sohbet: " + target + "\n" +
+    "Son başarılı paylaşım: " + last + "\n" +
+    "Görsel API anahtarı: " + (process.env.POLLINATIONS_API_KEY ? "Yapılandırılmış" : "Eksik") + "\n\n" +
+    "Komutlar: /autopost_on, /autopost_off, /autopost_time 10:30, /autopost_test"
+  );
+});
+
+bot.command("autopost_time", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  const time = String(ctx.match || "").trim();
+  if (!isValidTime(time)) return ctx.reply("⏰ Geçerli bir 24 saat formatı kullan. Örnek: /autopost_time 10:30");
+  settings.time = time;
+  saveSettings();
+  await ctx.reply("⏰ Günlük paylaşım saati " + time + " (Bakü saati) olarak ayarlandı.");
+});
+
+bot.command("autopost_test", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  await ctx.reply("🧪 Test paylaşımı hazırlanıyor...");
+  try {
+    const result = await sendDailyPost(ctx.chat.id);
+    await ctx.reply(result.image
+      ? "✅ Test başarılı: görsel ve açıklama gönderildi. Konu: " + result.topic
+      : "⚠️ Metin paylaşımı gönderildi fakat görsel üretimi başarısız oldu. API anahtarını ve servis yanıtını kontrol et.");
+  } catch (error) {
+    console.error("Auto-post test failed:", error.message || error);
+    await ctx.reply("❌ Test başarısız: " + (error.message || "Bilinmeyen hata"));
+  }
+});
+
+bot.command("announce", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
   const announcement = ctx.match?.trim();
   if (!announcement) return ctx.reply("Kullanım: /announce Duyuru metni");
   await ctx.reply("📢 VYRA DUYURUSU\n\n" + announcement);
@@ -159,7 +321,6 @@ bot.on("message", async (ctx, next) => {
   fresh.push(now);
   recentMessages.set(key, fresh);
 
-  // Keep the in-memory map bounded in long-running processes.
   if (recentMessages.size > 5000) {
     for (const [storedKey, timestamps] of recentMessages) {
       if (!timestamps.length || now - timestamps[timestamps.length - 1] > 60000) recentMessages.delete(storedKey);
@@ -174,9 +335,29 @@ bot.on("message", async (ctx, next) => {
   return next();
 });
 
+async function runSchedulerTick() {
+  if (!settings.enabled || !settings.chatId || postingNow) return;
+  const current = getBakuDateTime();
+  if (current.time !== settings.time || settings.lastPostedDate === current.date) return;
+
+  postingNow = true;
+  try {
+    const result = await sendDailyPost(settings.chatId);
+    settings.lastPostedDate = current.date;
+    saveSettings();
+    console.log("Daily post sent:", current.date, result.topic, "image:", result.image);
+  } catch (error) {
+    console.error("Daily post failed; scheduler will retry:", error.message || error);
+  } finally {
+    postingNow = false;
+  }
+}
+
 bot.catch((error) => console.error("Telegram bot error:", error.message || error));
 
 (async () => {
+  loadSettings();
+  if (!isValidTime(settings.time)) settings.time = "10:00";
   try {
     await bot.api.setMyCommands(commandList);
   } catch (error) {
@@ -187,6 +368,8 @@ bot.catch((error) => console.error("Telegram bot error:", error.message || error
     await bot.start({
       onStart: (info) => console.log("VYRA Telegram Bot started as @" + info.username)
     });
+    setInterval(() => { runSchedulerTick().catch((error) => console.error("Scheduler tick error:", error)); }, 15000);
+    console.log("Daily scheduler ready. Timezone: Asia/Baku; default time: " + settings.time);
   } catch (error) {
     console.error("Failed to start Telegram bot:", error);
     process.exit(1);
