@@ -104,7 +104,7 @@ function saveMediaLibrary() {
 
 async function sendDailyPost(chatId, slotNumber = 1) {
   const current = getBakuDateTime();
-  const fallback = getDailyContent(new Date());
+  const fallback = getDailyContent(new Date(Date.now() + (Math.max(1, slotNumber) - 1) * 86400000));
   const topic = contentTopics[(Math.max(1, slotNumber) - 1 + Math.floor(Date.now() / 86400000)) % contentTopics.length];
   let caption = fallback.caption.replace(/\*\*/g, "");
   let aiGenerated = false;
