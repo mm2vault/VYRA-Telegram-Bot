@@ -338,7 +338,7 @@ bot.on("message", async (ctx, next) => {
 async function runSchedulerTick() {
   if (!settings.enabled || !settings.chatId || postingNow) return;
   const current = getBakuDateTime();
-  if (current.time !== settings.time || settings.lastPostedDate === current.date) return;
+  if (current.time < settings.time || settings.lastPostedDate === current.date) return;
 
   postingNow = true;
   try {
