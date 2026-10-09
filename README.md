@@ -1,62 +1,66 @@
 # VYRA Telegram Bot 💜
 
-Turkish-language VYRA community bot built with Node.js and grammY.
+Node.js ve grammY ile hazırlanmış Türkçe VYRA topluluk botu. Görsel üretmek için ücretli veya limitli bir AI API'sine ihtiyaç duymaz: yönetici fotoğrafları bota gönderir, bot bu görselleri seçilen Telegram kanalında hazır VYRA metinleriyle otomatik paylaşır.
 
-## Features
+## Özellikler
 
-- Inline and quick-reply navigation menus
-- Telegram command menu registered at startup
-- `/start`, `/help`, `/about`, `/rules`, `/id`, and `/ping`
-- New-member welcome messages
-- Lightweight group flood protection (grant delete-message permission if you want it to delete flood messages)
-- Admin-restricted announcements
-- Admin-only AI image generation via `/image [description]`; without a description, Gemini chooses the visual idea and writes the detailed prompt automatically
-- Admin-controlled daily automated technology, AI, digital-safety and VYRA posts
-- Daily image generation with a text-only fallback if image generation temporarily fails
-- Configurable daily posting time in the Asia/Baku timezone
-- `/autopost_on`, `/autopost_off`, `/autopost_status`, `/autopost_time HH:MM`, `/autopost_test`
-- `/health` and root health endpoints
-- Graceful shutdown and automated helper tests
+- `/start`, `/help`, `/about`, `/rules`, `/id`, `/ping`
+- Yeni üye karşılama mesajı ve hafif flood koruması
+- Yöneticiye özel duyuru komutu: `/announce mesaj`
+- Yönetici fotoğraf havuzu: bota özel sohbetten fotoğraf gönder; Telegram file_id'si kaydedilir
+- Otomatik gönderilerde havuzdaki fotoğrafları sırayla kullanır
+- Her fotoğrafa teknoloji, dijital güvenlik, üretkenlik veya VYRA topluluğu hakkında hazır Türkçe açıklama ekler
+- Hedef kanal seçimi: `/autopost_target @kanal_kullaniciadi`
+- Günlük otomatik paylaşımı aç/kapat, durumunu gör ve Bakü saatine göre zamanla
+- `/autopost_test` ile gönderiyi dene
+- `/health` ve kök health endpoint'i
+- API anahtarı veya AI görsel üretim servisi gerektirmez
 
-## Environment variables
+## Environment değişkenleri
 
-Set these in your hosting provider's Environment/Secrets settings. Never commit tokens or API keys to GitHub.
+Hosting platformunun Environment/Secrets bölümünde ayarla. Bot token'ını asla GitHub'a veya sohbet mesajlarına koyma.
 
-- `TELEGRAM_BOT_TOKEN` — required; token from BotFather.
-- `TELEGRAM_ADMIN_IDS` — recommended; comma-separated numeric Telegram user IDs allowed to use admin features, including image generation and schedule controls. Without this, admin commands are denied to everyone.
-- `GEMINI_API_KEY` — optional if Hugging Face is configured; create it in [Google AI Studio](https://aistudio.google.com/apikey). Keep it in hosting Environment/Secrets, never in GitHub.
-- `GEMINI_IMAGE_MODEL` — optional; defaults to `gemini-nano-banana-2.1` (Gemini native image-generation model).
-- `HF_TOKEN` — optional fallback / alternative provider. Create a Hugging Face token with Inference Providers permission in [Hugging Face Settings](https://huggingface.co/settings/tokens). The free account currently includes $0.10/month of Inference Providers credits, which is limited and may change; it is not unlimited free generation. Keep the token in hosting Environment/Secrets, never in GitHub.
-- `HF_IMAGE_MODEL` — optional; defaults to `stabilityai/stable-diffusion-3-medium-diffusers` through Hugging Face's Inference Providers router.
-- `GEMINI_PROMPT_MODEL` — optional; defaults to `gemini-3.8-flash`, which expands the topic into a detailed image prompt. If this prompt model returns an empty response or is temporarily unavailable, the bot falls back to a built-in VYRA prompt and still attempts image generation (authentication errors remain visible).
-- `AUTO_POST_TIME` — optional default posting time in 24-hour `HH:MM`, Baku time; defaults to `10:00`.
-- `PORT` — optional; hosting platforms usually set this.
+- `TELEGRAM_BOT_TOKEN` — BotFather'dan alınan zorunlu bot token'ı.
+- `TELEGRAM_ADMIN_IDS` — Özel sohbetten yönetici komutlarını kullanabilecek sayısal Telegram kullanıcı ID'leri; virgülle ayrılabilir. Önerilen değer: kendi kullanıcı ID'n.
+- `AUTO_POST_TIME` — Günlük paylaşım saati, Bakü saatine göre `HH:MM`; varsayılan `10:00`.
+- `PORT` — İsteğe bağlı; hosting platformu genellikle kendisi ayarlar.
 
-## Set up daily posts
+## İlk kurulum
 
-1. Deploy the bot and configure the environment variables above.
-2. Add the bot to your Telegram group. Give it permission to send messages and photos. Give it delete-message permission only if you want flood deletion.
-3. In your target group, an admin whose Telegram numeric ID is in `TELEGRAM_ADMIN_IDS` sends `/autopost_on`. This saves that group as the target and enables daily posts.
-4. Send `/autopost_time 10:30` to change the schedule to 10:30 in Baku time.
-5. Send `/autopost_test` to test image generation and delivery.
-6. Use `/autopost_status` to inspect the state, target chat and API-key configuration. Use `/autopost_off` to stop scheduled posts.
-7. Send `/image` and Gemini will invent a VYRA-themed visual idea, write a detailed prompt, and generate the image. Or give it a topic, e.g. `/image mor neon yapay zekâ posteri`.
+1. Botu Node.js 20 veya üstünde çalıştır.
+2. Telegram'da botu hedef kanala ekle ve **yönetici** yap. Gönderi paylaşma izni açık olmalı.
+3. Botun özel sohbetini aç ve `/autopost_target @kanal_kullaniciadi` gönder. Kanalın kullanıcı adı yoksa bu komut için kullanıcı adı olan bir kanal kullan.
+4. Aynı özel sohbete paylaşmak istediğin fotoğrafları tek tek gönder. Bot her fotoğrafı havuza eklediğini söyleyecek.
+5. `/media_status` ile havuzdaki görsel sayısını kontrol et.
+6. `/autopost_on` ile günlük paylaşımı aç.
+7. İstersen `/autopost_time 10:30` ile saati değiştir.
+8. `/autopost_test` ile hemen deneme gönderisi yap.
+9. `/autopost_status` durum, hedef kanal, saat ve fotoğraf sayısını gösterir; `/autopost_off` paylaşımı durdurur.
 
-Daily posts rotate through a set of Turkish technology tips, AI reminders, digital-safety advice and VYRA community messages. They are not live news summaries; the scheduled copy is curated in the source code.
+Botu bir grup içinde `/autopost_on` ile başlatırsan o grup da hedef olarak seçilebilir.
 
-## Storage and hosting notes
+## Komutlar
 
-- The bot uses Telegram long polling and must stay running for reliable 24/7 responses.
-- The schedule state is saved to `data/automation-settings.json`. Hosts with ephemeral filesystems may lose this file after a redeploy or restart; if that happens, run `/autopost_on` again in the target group.
-- Free hosting can sleep, restart or enforce usage limits. The scheduler checks every 15 seconds while the process is running, but no free host can guarantee that the bot is awake at the exact scheduled minute.
-- Gemini image generation uses the Google AI Studio API when configured. If Gemini image generation fails and `HF_TOKEN` is configured, the bot automatically retries image generation through Hugging Face Inference Providers. Hugging Face free credits are small ($0.10/month at the time of writing), may change, and do not guarantee that every model is available to every account. Without either working provider, scheduled posts fall back to text.
+- `/image` — Hedef sohbetine havuzdaki sıradaki fotoğrafı hazır VYRA metniyle gönderir.
+- `/autopost_target @kanal` — Otomatik gönderiler için hedef kanalı seçer.
+- `/autopost_on` / `/autopost_off` — Otomatik paylaşımı açar veya kapatır.
+- `/autopost_status` — Durumu gösterir.
+- `/autopost_time HH:MM` — Bakü saatine göre günlük saati ayarlar.
+- `/autopost_test` — Hemen bir deneme gönderisi yapar.
+- `/media_status` — Kayıtlı fotoğraf sayısını gösterir.
 
-## Local development and tests
+## Görsel havuzu ve hosting notları
 
-1. Install Node.js 20 or newer.
-2. Run `npm install`.
-3. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_IDS`, and either `GEMINI_API_KEY` or `HF_TOKEN` in your local environment (do not commit a `.env` file).
-4. Run `npm test` to test the schedule/content helpers.
-5. Run `npm start` to start the bot.
+Fotoğrafların kendisi tekrar indirilmez; bot Telegram'ın verdiği `file_id` değerini `data/media-library.json` dosyasına kaydeder. Bu, dosya boyutunu küçük tutar. Ancak Render gibi geçici dosya sistemine sahip hostlarda yeniden dağıtım veya yeniden başlatma sonrasında yerel JSON dosyaları kaybolabilir. Böyle bir durumda fotoğrafları bota yeniden göndermek ve `/autopost_target` / `/autopost_on` ayarlarını kontrol etmek gerekir. Kalıcı medya havuzu için kalıcı disk veya harici veritabanı gerekir.
 
-Automated tests cover the daily content helper, prompt formatting, time validation, Baku time formatting, mocked Gemini prompt-generation/image API success/error responses, prompt-model outage fallback, and nested image payload parsing. They do not call Google's live API or send messages to Telegram; use `/autopost_test` in your group for a live integration check.
+Zamanlayıcı süreç çalışırken 15 saniyede bir kontrol eder; günlük gönderi ayarlanan saatte yapılır. Ücretsiz hosting uykuya geçerse gönderi gecikebilir. Botun kanalda yönetici kalması gerekir.
+
+## Yerel çalıştırma
+
+```bash
+npm install
+npm test
+npm start
+```
+
+`.env` dosyası oluşturup `TELEGRAM_BOT_TOKEN` ve `TELEGRAM_ADMIN_IDS` değerlerini yerel ortamında ayarla; bu dosyayı commit etme.
