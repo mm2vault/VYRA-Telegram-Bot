@@ -26,7 +26,7 @@ Set these in your hosting provider's Environment/Secrets settings. Never commit 
 - `TELEGRAM_ADMIN_IDS` — recommended; comma-separated numeric Telegram user IDs allowed to use admin features, including image generation and schedule controls. Without this, admin commands are denied to everyone.
 - `GEMINI_API_KEY` — required for AI image generation; create it in [Google AI Studio](https://aistudio.google.com/apikey). Keep it in hosting Environment/Secrets, never in GitHub.
 - `GEMINI_IMAGE_MODEL` — optional; defaults to `gemini-nano-banana-2.1` (Gemini native image-generation model).
-- `GEMINI_PROMPT_MODEL` — optional; defaults to `gemini-3.8-flash`, which automatically expands the topic into a detailed image prompt.
+- `GEMINI_PROMPT_MODEL` — optional; defaults to `gemini-3.8-flash`, which expands the topic into a detailed image prompt. If this prompt model returns an empty response or is temporarily unavailable, the bot falls back to a built-in VYRA prompt and still attempts image generation (authentication errors remain visible).
 - `AUTO_POST_TIME` — optional default posting time in 24-hour `HH:MM`, Baku time; defaults to `10:00`.
 - `PORT` — optional; hosting platforms usually set this.
 
@@ -57,4 +57,4 @@ Daily posts rotate through a set of Turkish technology tips, AI reminders, digit
 4. Run `npm test` to test the schedule/content helpers.
 5. Run `npm start` to start the bot.
 
-Automated tests cover the daily content helper, prompt formatting, time validation, Baku time formatting, and mocked Gemini prompt-generation/image API success/error responses. They do not call Google's live API or send messages to Telegram; use `/autopost_test` in your group for a live integration check.
+Automated tests cover the daily content helper, prompt formatting, time validation, Baku time formatting, mocked Gemini prompt-generation/image API success/error responses, prompt-model outage fallback, and nested image payload parsing. They do not call Google's live API or send messages to Telegram; use `/autopost_test` in your group for a live integration check.
