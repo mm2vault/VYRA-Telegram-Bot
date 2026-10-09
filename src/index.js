@@ -62,7 +62,7 @@ function saveSettings() {
 const { generateImageBuffer } = require("./gemini-image");
 async function sendImage(chatId, prompt, caption) {
   const image = await generateImageBuffer(prompt);
-  await bot.api.sendPhoto(chatId, new InputFile(image, "vyra-ai-image.jpg"), {
+  await bot.api.sendPhoto(chatId, new InputFile(image, "vyra-ai-image.png"), {
     caption: String(caption || "💜 VYRA • AI Görseli").slice(0, 1000)
   });
 }
