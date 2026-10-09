@@ -31,13 +31,29 @@ const defaultSettings = {
 let settings = { ...defaultSettings };
 let postingNow = false;
 
-function isAdmin(ctx) {
+function isConfiguredAdmin(ctx) {
   return Boolean(ctx.from?.id && adminIds.has(String(ctx.from.id)));
 }
 
 async function requireAdmin(ctx) {
-  if (isAdmin(ctx)) return true;
-  await ctx.reply("⛔ Bu özellik yalnızca VYRA yöneticilerine açıktır.");
+  // Explicitly configured owners are allowed in private chats and groups.
+  if (isConfiguredAdmin(ctx)) return true;
+
+  // In groups, also trust Telegram's native creator/administrator role.
+  // Telegram has no group-admin role in a private chat, so private commands
+  // still require the user's numeric ID in TELEGRAM_ADMIN_IDS.
+  if (ctx.chat && ctx.chat.type !== "private" && ctx.from?.id) {
+    try {
+      const member = await bot.api.getChatMember(ctx.chat.id, ctx.from.id);
+      if (member.status === "creator" || member.status === "administrator") return true;
+    } catch (error) {
+      console.warn("Could not verify Telegram group admin status:", error.message || error);
+    }
+  }
+
+  await ctx.reply(
+    "⛔ Yönetici yetkin doğrulanamadı. Komutu grupta dene; özel sohbette kullanmak için hosting Environment bölümündeki TELEGRAM_ADMIN_IDS değişkenine Telegram kullanıcı ID'ni ekle."
+  );
   return false;
 }
 
