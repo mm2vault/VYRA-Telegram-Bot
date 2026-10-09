@@ -144,16 +144,16 @@ async function generateImageBuffer(brief, options = {}) {
   try {
     if (!apiKey) throw new Error("Gemini API anahtarı yok; Hugging Face yedek sağlayıcısı kullanılacak.");
     data = await callGemini({
-    apiKey,
-    model,
-    input: prompt,
-    responseFormat: {
-      type: "image",
-      mime_type: "image/jpeg",
-      aspect_ratio: "1:1",
-      image_size: "1K"
-    },
-    fetchImpl
+      apiKey,
+      model,
+      input: prompt,
+      responseFormat: {
+        type: "image",
+        mime_type: "image/jpeg",
+        aspect_ratio: "1:1",
+        image_size: "1K"
+      },
+      fetchImpl
     });
   } catch (error) {
     if (!hfToken) throw error;
@@ -181,6 +181,10 @@ async function generateImageBuffer(brief, options = {}) {
   }
   if (!imageData || typeof imageData !== "string") {
     const detail = (data?.error?.message || extractText(data) || "Yanıtta görsel verisi bulunamadı.").slice(0, 300);
+    if (hfToken) {
+      console.warn("Gemini returned no image data; trying Hugging Face fallback:", detail);
+      return generateHuggingFaceImageBuffer(prompt, options);
+    }
     throw new Error("Gemini görsel döndürmedi: " + detail);
   }
 
