@@ -69,6 +69,38 @@ test("Empty prompt response falls back to a detailed VYRA image prompt", async (
   assert.equal(calls, 2);
 });
 
+test("Unavailable prompt model falls back and still requests an image", async () => {
+  const calls = [];
+  const bytes = Buffer.from("fallback-image");
+  const result = await generateImageBuffer("VYRA mor neon teknoloji", {
+    apiKey: "test-key",
+    fetchImpl: async (_url, init) => {
+      const body = JSON.parse(init.body);
+      calls.push(body);
+      if (body.model === PROMPT_MODEL) {
+        return mockResponse({ ok: false, status: 404, text: "model no longer available" });
+      }
+      return mockResponse({ data: { output_image: { data: bytes.toString("base64") } } });
+    }
+  });
+  assert.deepEqual(result, bytes);
+  assert.equal(calls.length, 2);
+  assert.match(calls[1].input, /premium, original VYRA social-media artwork/i);
+  assert.match(calls[1].input, /VYRA mor neon teknoloji/);
+});
+
+test("Gemini extracts image data from nested output content", async () => {
+  const bytes = Buffer.from("nested-image-data");
+  const result = await generateImageBuffer("VYRA test", {
+    apiKey: "test-key",
+    skipPromptGeneration: true,
+    fetchImpl: async () => mockResponse({
+      data: { output: [{ content: [{ type: "image", inline_data: { data: bytes.toString("base64") } }] }] }
+    })
+  });
+  assert.deepEqual(result, bytes);
+});
+
 test("Gemini image generator fails clearly when API key is missing", async () => {
   await assert.rejects(
     generateImageBuffer("test", { apiKey: "", fetchImpl: async () => { throw new Error("should not call"); } }),
