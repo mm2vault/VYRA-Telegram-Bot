@@ -59,31 +59,7 @@ function saveSettings() {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
 }
 
-async function generateImageBuffer(prompt) {
-  const apiKey = process.env.POLLINATIONS_API_KEY;
-  if (!apiKey) {
-    throw new Error("Görsel servisi henüz yapılandırılmamış. POLLINATIONS_API_KEY anahtarını barındırma servisinin Environment/Secrets bölümüne ekleyin.");
-  }
-  const url = new URL("https://gen.pollinations.ai/image/" + encodeURIComponent(prompt));
-  url.searchParams.set("model", process.env.POLLINATIONS_IMAGE_MODEL || "flux");
-  url.searchParams.set("width", "1024");
-  url.searchParams.set("height", "1024");
-  url.searchParams.set("nologo", "true");
-  const response = await fetch(url, {
-    headers: { Authorization: "Bearer " + apiKey },
-    signal: AbortSignal.timeout(90000)
-  });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 300);
-    throw new Error("Görsel servisi HTTP " + response.status + (detail ? ": " + detail : ""));
-  }
-  const type = response.headers.get("content-type") || "";
-  if (!type.startsWith("image/")) throw new Error("Görsel servisi bir resim döndürmedi.");
-  const buffer = Buffer.from(await response.arrayBuffer());
-  if (!buffer.length) throw new Error("Görsel servisi boş dosya döndürdü.");
-  return buffer;
-}
-
+const { generateImageBuffer } = require("./gemini-image");
 async function sendImage(chatId, prompt, caption) {
   const image = await generateImageBuffer(prompt);
   await bot.api.sendPhoto(chatId, new InputFile(image, "vyra-ai-image.jpg"), {
@@ -266,7 +242,7 @@ bot.command("autopost_status", async (ctx) => {
     "Saat: " + settings.time + " (Bakü saati)\n" +
     "Hedef sohbet: " + target + "\n" +
     "Son başarılı paylaşım: " + last + "\n" +
-    "Görsel API anahtarı: " + (process.env.POLLINATIONS_API_KEY ? "Yapılandırılmış" : "Eksik") + "\n\n" +
+    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "Yapılandırılmış" : "Eksik") + "\n\n" +
     "Komutlar: /autopost_on, /autopost_off, /autopost_time 10:30, /autopost_test"
   );
 });
