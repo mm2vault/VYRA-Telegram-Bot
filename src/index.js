@@ -437,7 +437,7 @@ bot.command("ai_status", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
   await ctx.reply("🤖 VYRA AI durumu\n\n" +
     "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "tanımlı" : "tanımlı değil") + "\n" +
-    "Model: " + (process.env.GEMINI_MODEL || "gemini-2.5-flash") + "\n" +
+    "Model: " + (process.env.GEMINI_MODEL || "gemini-3.8-flash") + "\n" +
     "AI anahtarı hiçbir zaman bu komutta gösterilmez.");
 });
 
