@@ -27,7 +27,8 @@ Hosting platformunun Environment/Secrets bölümünde ayarla. Bot token'ını as
 - `AUTO_POST_TIMES` — Üç paylaşım saati virgülle ayrılır; varsayılan `10:00,15:00,20:00` (Bakü saati).
 - `GEMINI_API_KEY` — AI metin üretimi ve soru-cevap için isteğe bağlı Gemini API anahtarı. Anahtarı GitHub’a veya sohbete koyma.
 - `GEMINI_MODEL` — İsteğe bağlı model adı; varsayılan `gemini-2.5-flash`.
-- `DATA_DIR` — JSON ayarları ve görsel havuzu için dizin. Varsayılan `./data`; Render Persistent Disk `/var/data` noktasına bağlandıysa `DATA_DIR=/var/data` ayarla.\n- `PORT` — İsteğe bağlı; hosting platformu genellikle kendisi ayarlar.
+- `DATA_DIR` — JSON ayarları ve görsel havuzu için dizin. Varsayılan `./data`; Render Persistent Disk `/var/data` noktasına bağlandıysa `DATA_DIR=/var/data` ayarla.
+- `PORT` — İsteğe bağlı; hosting platformu genellikle kendisi ayarlar.
 
 ## İlk kurulum
 
@@ -62,7 +63,11 @@ Fotoğrafların kendisi tekrar indirilmez; bot Telegram'ın verdiği `file_id` d
 
 Zamanlayıcı süreç çalışırken 15 saniyede bir kontrol eder; üç paylaşımı planlanan Bakü saatlerinde yapar. Gemini REST API ile metin üretimi ve API anahtarı başlığı kullanılır; anahtar URL’ye yazılmaz. AI yanıtları süre sınırı ve kullanıcı başına bekleme aralığıyla korunur. Ücretsiz hosting uykuya geçerse gönderi gecikebilir. Botun kanalda yönetici kalması gerekir.
 
-## AI kurulumu\n\nGoogle AI Studio üzerinden Gemini API anahtarı oluştur ve anahtarı yalnızca hosting'in Environment/Secrets bölümüne `GEMINI_API_KEY` olarak kaydet. `GEMINI_MODEL` isteğe bağlıdır. Anahtar ayarlı değilse otomatik paylaşımlar hazır Türkçe metinlere geri döner; AI soru-cevap özelliği devre dışı kalır. Kullanım limitleri ve ücretlendirme Google hesabına/planına bağlıdır.\n\n## Yerel çalıştırma
+## AI kurulumu
+
+Google AI Studio üzerinden Gemini API anahtarı oluştur ve anahtarı yalnızca hosting'in Environment/Secrets bölümüne `GEMINI_API_KEY` olarak kaydet. `GEMINI_MODEL` isteğe bağlıdır. Anahtar ayarlı değilse otomatik paylaşımlar hazır Türkçe metinlere geri döner; AI soru-cevap özelliği devre dışı kalır. Kullanım limitleri ve ücretlendirme Google hesabına/planına bağlıdır.
+
+## Yerel çalıştırma
 
 ```bash
 npm install
