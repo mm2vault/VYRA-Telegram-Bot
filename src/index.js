@@ -3,7 +3,7 @@ const express = require("express");
 const fs = require("node:fs");
 const path = require("node:path");
 const { Bot, InlineKeyboard, InputFile } = require("grammy");
-const { getDailyContent, buildImagePrompt, isValidTime, getBakuDateTime } = require("./automation");
+const { getDailyContent, isValidTime, getBakuDateTime } = require("./automation");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -25,6 +25,7 @@ const settingsPath = path.join(process.cwd(), "data", "automation-settings.json"
 const defaultSettings = {
   enabled: false,
   chatId: null,
+  targetTitle: null,
   time: process.env.AUTO_POST_TIME || "10:00",
   lastPostedDate: null
 };
@@ -75,26 +76,39 @@ function saveSettings() {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
 }
 
-const { generateImageBuffer } = require("./gemini-image");
-async function sendImage(chatId, prompt, caption) {
-  const image = await generateImageBuffer(prompt);
-  await bot.api.sendPhoto(chatId, new InputFile(image, "vyra-ai-image.png"), {
-    caption: String(caption || "💜 VYRA • AI Görseli").slice(0, 1000)
-  });
+const mediaLibraryPath = path.join(process.cwd(), "data", "media-library.json");
+let mediaLibrary = { nextIndex: 0, items: [] };
+
+function loadMediaLibrary() {
+  try {
+    const saved = JSON.parse(fs.readFileSync(mediaLibraryPath, "utf8"));
+    mediaLibrary = {
+      nextIndex: Number.isInteger(saved.nextIndex) && saved.nextIndex >= 0 ? saved.nextIndex : 0,
+      items: Array.isArray(saved.items) ? saved.items.filter((item) => item && typeof item.fileId === "string") : []
+    };
+  } catch (_) {
+    mediaLibrary = { nextIndex: 0, items: [] };
+  }
+}
+
+function saveMediaLibrary() {
+  fs.mkdirSync(path.dirname(mediaLibraryPath), { recursive: true });
+  fs.writeFileSync(mediaLibraryPath, JSON.stringify(mediaLibrary, null, 2), { mode: 0o600 });
 }
 
 async function sendDailyPost(chatId) {
   const content = getDailyContent(new Date());
   const caption = content.caption.replace(/\*\*/g, "");
-  try {
-    await sendImage(chatId, buildImagePrompt(content.visual), caption);
+  if (mediaLibrary.items.length) {
+    const index = mediaLibrary.nextIndex % mediaLibrary.items.length;
+    const media = mediaLibrary.items[index];
+    mediaLibrary.nextIndex = (index + 1) % mediaLibrary.items.length;
+    saveMediaLibrary();
+    await bot.api.sendPhoto(chatId, media.fileId, { caption: caption.slice(0, 1000) });
     return { image: true, topic: content.topic };
-  } catch (error) {
-    console.error("Daily image generation failed:", error.message || error);
-    // Keep the scheduled community post useful even when the image provider is temporarily unavailable.
-    await bot.api.sendMessage(chatId, caption + "\n\n🎨 Görsel şu an üretilemedi; sonraki paylaşımda tekrar denenecek.");
-    return { image: false, topic: content.topic, error };
   }
+  await bot.api.sendMessage(chatId, caption + "\n\n🖼️ Görsel havuzu boş. Bota özel mesajdan fotoğraf göndererek paylaşım havuzuna ekleyebilirsin.");
+  return { image: false, topic: content.topic };
 }
 
 const menuKeyboard = new InlineKeyboard()
@@ -119,7 +133,9 @@ const commandList = [
   { command: "rules", description: "Topluluk kurallarını gör" },
   { command: "id", description: "Telegram kullanıcı ve sohbet kimliğini gör" },
   { command: "ping", description: "Bot bağlantısını kontrol et" },
-  { command: "image", description: "Yönetici: otomatik AI görseli oluştur" },
+  { command: "image", description: "Yönetici: havuzdaki sıradaki resmi paylaş" },
+  { command: "autopost_target", description: "Yönetici: hedef kanal seç, ör. /autopost_target @kanal" },
+  { command: "media_status", description: "Yönetici: kayıtlı görsel sayısını gör" },
   { command: "autopost_on", description: "Yönetici: günlük paylaşımı aç ve bu grubu seç" },
   { command: "autopost_off", description: "Yönetici: günlük paylaşımı durdur" },
   { command: "autopost_status", description: "Yönetici: paylaşım durumunu gör" },
@@ -147,7 +163,8 @@ bot.command("help", async (ctx) => {
   await ctx.reply(
     "📚 VYRA • KOMUT MERKEZİ\n\n" +
     "/start — Ana menü\n/help — Yardım\n/about — VYRA hakkında\n/rules — Kurallar\n/id — Kimlik bilgileri\n/ping — Bağlantı testi\n\n" +
-    "🎨 /image açıklama — Yönetici AI görseli\n" +
+    "🖼️ /image — Havuzdaki sıradaki resmi paylaş\n" +
+    "/autopost_target @kanal — Hedef kanalı seç\n/media_status — Görsel havuzunu gör\n" +
     "📅 /autopost_on — Bu grupta günlük paylaşımı aç\n" +
     "/autopost_off — Otomatik paylaşımı durdur\n" +
     "/autopost_status — Durumu kontrol et\n" +
@@ -213,30 +230,71 @@ bot.callbackQuery("menu:rules", async (ctx) => {
 
 bot.command("image", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  const suppliedBrief = String(ctx.match || "").trim().slice(0, 500);
-  const brief = suppliedBrief || "Bugün için özgün, mor neon temalı VYRA topluluk görseli tasarla. Teknoloji, yapay zekâ ve dijital yaratıcılık temasını kendin seç.";
-  await ctx.reply("✨ Gemini otomatik görsel fikrini ve ayrıntılı promptu hazırlıyor, ardından resmi üretiyor...");
-  try {
-    await sendImage(ctx.chat.id, buildImagePrompt(brief), "💜 VYRA • Gemini AI Görseli\n" + (suppliedBrief || "Gemini bugünün görsel fikrini kendi seçti."));
-  } catch (error) {
-    console.error("Manual image generation failed:", error.message || error);
-    await ctx.reply("❌ Görsel oluşturulamadı.\n" + (error.message || "Bilinmeyen hata"));
+  if (!mediaLibrary.items.length) {
+    return ctx.reply("🖼️ Görsel havuzu henüz boş. Bana özel sohbetten fotoğraf gönder; ardından /image ile sıradaki resmi paylaşabilirsin.");
   }
+  try {
+    const result = await sendDailyPost(ctx.chat.id);
+    await ctx.reply("✅ Havuzdaki görsel ve VYRA metni paylaşıldı. Konu: " + result.topic);
+  } catch (error) {
+    console.error("Manual media post failed:", error.message || error);
+    await ctx.reply("❌ Görsel gönderilemedi: " + (error.message || "Bilinmeyen hata"));
+  }
+});
+
+bot.command("autopost_target", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  const target = String(ctx.match || "").trim();
+  if (!target) return ctx.reply("Kullanım: /autopost_target @kanal_kullaniciadi\nBotu kanalda yönetici yapıp bu komutu özel sohbetinde gönder.");
+  try {
+    const chat = await bot.api.getChat(target);
+    const member = await bot.api.getChatMember(chat.id, bot.botInfo.id);
+    if (member.status !== "administrator" && member.status !== "creator") {
+      return ctx.reply("⛔ Bot bu kanalda yönetici değil. Önce botu kanala ekleyip gönderi paylaşma yetkisi ver.");
+    }
+    settings.chatId = chat.id;
+    settings.targetTitle = chat.title || chat.username || String(chat.id);
+    saveSettings();
+    await ctx.reply("📢 Hedef kanal seçildi: " + settings.targetTitle + "\nŞimdi /autopost_on ile otomatik paylaşımı açabilirsin.");
+  } catch (error) {
+    await ctx.reply("❌ Kanal bulunamadı veya botun erişimi yok. @kanal_kullaniciadi doğru mu ve bot kanalda yönetici mi?\n" + (error.message || ""));
+  }
+});
+
+bot.command("media_status", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  await ctx.reply("🖼️ VYRA görsel havuzu\n\nKayıtlı fotoğraf: " + mediaLibrary.items.length + "\nHedef: " + (settings.targetTitle || settings.chatId || "seçilmedi") + "\n\nYeni fotoğraf eklemek için bota özel mesajdan fotoğraf gönder.");
+});
+
+bot.on("message:photo", async (ctx, next) => {
+  if (ctx.chat.type !== "private" || !isConfiguredAdmin(ctx)) return next();
+  const photo = ctx.message.photo?.[ctx.message.photo.length - 1];
+  if (!photo?.file_id) return next();
+  const duplicate = mediaLibrary.items.some((item) => item.fileId === photo.file_id);
+  if (!duplicate) {
+    mediaLibrary.items.push({ fileId: photo.file_id, addedAt: new Date().toISOString() });
+    saveMediaLibrary();
+  }
+  await ctx.reply((duplicate ? "ℹ️ Bu fotoğraf zaten kayıtlı. " : "✅ Fotoğraf görsel havuzuna eklendi. ") +
+    "\nToplam fotoğraf: " + mediaLibrary.items.length + "\nBot seçilen kanalda bu görselleri sırayla VYRA metinleriyle paylaşacak.");
 });
 
 bot.command("autopost_on", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  if (ctx.chat.type === "private") {
-    return ctx.reply("Önce VYRA grubunda bu komutu gönder. Bot o grubu günlük paylaşım hedefi olarak kaydedecek.");
+  if (ctx.chat.type === "private" && !settings.chatId) {
+    return ctx.reply("Önce /autopost_target @kanal_kullaniciadi ile hedef kanalı seç. Botun o kanalda yönetici olması gerekir.");
   }
-  settings.chatId = ctx.chat.id;
+  if (ctx.chat.type !== "private") {
+    settings.chatId = ctx.chat.id;
+    settings.targetTitle = ctx.chat.title || ctx.chat.username || String(ctx.chat.id);
+  }
   settings.enabled = true;
   saveSettings();
   await ctx.reply(
     "💜 Günlük otomatik paylaşım AÇIK!\n\n" +
     "🎨 İçerik: teknoloji, yapay zekâ, dijital ipuçları ve VYRA\n" +
     "🕒 Saat: " + settings.time + " (Bakü saati)\n" +
-    "📍 Bu grup hedef olarak kaydedildi.\n\n" +
+    "📍 Hedef: " + (settings.targetTitle || settings.chatId) + "\n\n" +
     "Test için /autopost_test yaz."
   );
 });
@@ -250,7 +308,7 @@ bot.command("autopost_off", async (ctx) => {
 
 bot.command("autopost_status", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  const target = settings.chatId === null ? "Henüz grup seçilmedi" : String(settings.chatId);
+  const target = settings.chatId === null ? "Henüz hedef seçilmedi" : (settings.targetTitle || String(settings.chatId));
   const last = settings.lastPostedDate || "Henüz paylaşım yapılmadı";
   await ctx.reply(
     "📅 VYRA • OTOMATİK PAYLAŞIM\n\n" +
@@ -258,9 +316,8 @@ bot.command("autopost_status", async (ctx) => {
     "Saat: " + settings.time + " (Bakü saati)\n" +
     "Hedef sohbet: " + target + "\n" +
     "Son başarılı paylaşım: " + last + "\n" +
-    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "Yapılandırılmış" : "Yok") + "\n" +
-    "Hugging Face yedeği: " + (process.env.HF_TOKEN ? "Yapılandırılmış" : "Kurulmadı") + "\n\n" +
-    "Komutlar: /autopost_on, /autopost_off, /autopost_time 10:30, /autopost_test"
+    "Görsel havuzu: " + mediaLibrary.items.length + " fotoğraf\n\n" +
+    "Komutlar: /autopost_target @kanal, /autopost_on, /autopost_off, /autopost_time 10:30, /autopost_test, /media_status"
   );
 });
 
@@ -350,6 +407,7 @@ bot.catch((error) => console.error("Telegram bot error:", error.message || error
 
 (async () => {
   loadSettings();
+  loadMediaLibrary();
   if (!isValidTime(settings.time)) settings.time = "10:00";
   try {
     await bot.api.setMyCommands(commandList);
