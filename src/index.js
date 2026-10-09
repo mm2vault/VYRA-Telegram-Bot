@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { Bot, InlineKeyboard } = require("grammy");
 const { getDailyContent, isValidTime, getBakuDateTime } = require("./automation");
+const { generatePost, answerCommunityQuestion } = require("./ai");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
 if (!token) {
@@ -26,11 +27,14 @@ const defaultSettings = {
   enabled: false,
   chatId: null,
   targetTitle: null,
-  time: process.env.AUTO_POST_TIME || "10:00",
-  lastPostedDate: null
+  times: (process.env.AUTO_POST_TIMES || "10:00,15:00,20:00").split(",").map((value) => value.trim()).filter(isValidTime).slice(0, 3),
+  lastPostedDate: null,
+  lastPostedSlots: {}
 };
 let settings = { ...defaultSettings };
 let postingNow = false;
+const aiCooldowns = new Map();
+const contentTopics = ["Yapay zekâ", "Dijital güvenlik", "Teknoloji ipucu", "Verimlilik", "VYRA topluluğu", "Dijital üretkenlik", "Güvenli internet"];
 
 function isConfiguredAdmin(ctx) {
   return Boolean(ctx.from?.id && adminIds.has(String(ctx.from.id)));
@@ -64,7 +68,8 @@ function loadSettings() {
     settings = {
       ...defaultSettings,
       ...saved,
-      time: isValidTime(saved.time) ? saved.time : defaultSettings.time
+      times: Array.isArray(saved.times) && saved.times.length ? saved.times.slice(0, 3).filter(isValidTime) : (isValidTime(saved.time) ? [saved.time, "15:00", "20:00"] : [...defaultSettings.times]),
+      lastPostedSlots: saved.lastPostedSlots && typeof saved.lastPostedSlots === "object" ? saved.lastPostedSlots : {}
     };
   } catch (_) {
     settings = { ...defaultSettings };
@@ -96,19 +101,26 @@ function saveMediaLibrary() {
   fs.writeFileSync(mediaLibraryPath, JSON.stringify(mediaLibrary, null, 2), { mode: 0o600 });
 }
 
-async function sendDailyPost(chatId) {
-  const content = getDailyContent(new Date());
-  const caption = content.caption.replace(/\*\*/g, "");
+async function sendDailyPost(chatId, slotNumber = 1) {
+  const current = getBakuDateTime();
+  const fallback = getDailyContent(new Date());
+  const topic = contentTopics[(Math.max(1, slotNumber) - 1 + Math.floor(Date.now() / 86400000)) % contentTopics.length];
+  let caption = fallback.caption.replace(/\*\*/g, "");
+  let aiGenerated = false;
+  if (process.env.GEMINI_API_KEY) {
+    try { caption = await generatePost(topic, current.date, slotNumber); aiGenerated = true; }
+    catch (error) { console.warn("AI post generation failed; using prepared caption:", error.message || error); }
+  }
   if (mediaLibrary.items.length) {
     const index = mediaLibrary.nextIndex % mediaLibrary.items.length;
     const media = mediaLibrary.items[index];
     mediaLibrary.nextIndex = (index + 1) % mediaLibrary.items.length;
     saveMediaLibrary();
     await bot.api.sendPhoto(chatId, media.fileId, { caption: caption.slice(0, 1000) });
-    return { image: true, topic: content.topic };
+    return { image: true, topic, aiGenerated };
   }
   await bot.api.sendMessage(chatId, caption + "\n\n🖼️ Görsel havuzu boş. Bota özel mesajdan fotoğraf göndererek paylaşım havuzuna ekleyebilirsin.");
-  return { image: false, topic: content.topic };
+  return { image: false, topic, aiGenerated };
 }
 
 const menuKeyboard = new InlineKeyboard()
@@ -139,7 +151,9 @@ const commandList = [
   { command: "autopost_on", description: "Yönetici: günlük paylaşımı aç ve bu grubu seç" },
   { command: "autopost_off", description: "Yönetici: günlük paylaşımı durdur" },
   { command: "autopost_status", description: "Yönetici: paylaşım durumunu gör" },
-  { command: "autopost_time", description: "Yönetici: saat ayarla, ör. /autopost_time 10:30" },
+  { command: "autopost_time", description: "Yönetici: gönderi saatini ayarla" },
+  { command: "autopost_times", description: "Yönetici: üç günlük paylaşım saatini gör" },
+  { command: "ai_status", description: "Yönetici: AI bağlantı ayarını gör" },
   { command: "autopost_test", description: "Yönetici: test paylaşımı gönder" },
   { command: "announce", description: "Yönetici duyurusu gönder" }
 ];
@@ -168,7 +182,7 @@ bot.command("help", async (ctx) => {
     "📅 /autopost_on — Bu grupta günlük paylaşımı aç\n" +
     "/autopost_off — Otomatik paylaşımı durdur\n" +
     "/autopost_status — Durumu kontrol et\n" +
-    "/autopost_time 10:30 — Paylaşım saatini ayarla\n" +
+    "/autopost_time 10:30 — 1. saati ayarla\n/autopost_time 2 15:00 — 2. saati ayarla\n/autopost_times — Üç saati gör\n/ai_status — AI ayarı\n" +
     "/autopost_test — Test paylaşımı gönder\n\n" +
     "🛡️ Yönetici: /announce mesajın",
     { reply_markup: menuKeyboard }
@@ -294,7 +308,7 @@ bot.command("autopost_on", async (ctx) => {
     "💜 Günlük otomatik paylaşım AÇIK!\n\n" +
     "🖼️ Görsel havuzundaki fotoğraf sırayla seçilir.\n" +
     "✍️ Her gönderiye VYRA hakkında hazır bir metin eklenir.\n" +
-    "🕒 Saat: " + settings.time + " (Bakü saati)\n" +
+    "🕒 Saatler: " + settings.times.join(", ") + " (Bakü saati)\n" +
     "📍 Hedef: " + (settings.targetTitle || settings.chatId) + "\n\n" +
     "Test için /autopost_test yaz."
   );
@@ -314,21 +328,27 @@ bot.command("autopost_status", async (ctx) => {
   await ctx.reply(
     "📅 VYRA • OTOMATİK PAYLAŞIM\n\n" +
     "Durum: " + (settings.enabled ? "🟢 Açık" : "⚪ Kapalı") + "\n" +
-    "Saat: " + settings.time + " (Bakü saati)\n" +
+    "Saatler: " + settings.times.join(", ") + " (Bakü saati)\n" +
     "Hedef sohbet: " + target + "\n" +
     "Son başarılı paylaşım: " + last + "\n" +
     "Görsel havuzu: " + mediaLibrary.items.length + " fotoğraf\n\n" +
-    "Komutlar: /autopost_target @kanal, /autopost_on, /autopost_off, /autopost_time 10:30, /autopost_test, /media_status"
+    "Komutlar: /autopost_target @kanal, /autopost_on, /autopost_off, /autopost_time 2 15:00, /autopost_times, /ai_status, /autopost_test, /media_status"
   );
 });
 
 bot.command("autopost_time", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  const time = String(ctx.match || "").trim();
-  if (!isValidTime(time)) return ctx.reply("⏰ Geçerli bir 24 saat formatı kullan. Örnek: /autopost_time 10:30");
-  settings.time = time;
+  const args = String(ctx.match || "").trim().split(/\s+/).filter(Boolean);
+  let slot = 1;
+  let time;
+  if (args.length === 1) time = args[0];
+  else if (args.length === 2 && /^[1-3]$/.test(args[0])) { slot = Number(args[0]); time = args[1]; }
+  if (!isValidTime(time)) return ctx.reply("⏰ Kullanım: /autopost_time 10:00 veya /autopost_time 2 15:00");
+  while (settings.times.length < 3) settings.times.push(["10:00", "15:00", "20:00"][settings.times.length]);
+  settings.times[slot - 1] = time;
+  settings.times.sort();
   saveSettings();
-  await ctx.reply("⏰ Günlük paylaşım saati " + time + " (Bakü saati) olarak ayarlandı.");
+  await ctx.reply("⏰ Paylaşım saatleri (Bakü): " + settings.times.join(", "));
 });
 
 bot.command("autopost_test", async (ctx) => {
@@ -389,19 +409,22 @@ bot.on("message", async (ctx, next) => {
 async function runSchedulerTick() {
   if (!settings.enabled || !settings.chatId || postingNow) return;
   const current = getBakuDateTime();
-  if (current.time < settings.time || settings.lastPostedDate === current.date) return;
-
+  const times = Array.isArray(settings.times) && settings.times.length ? settings.times : ["10:00", "15:00", "20:00"];
+  settings.lastPostedSlots = settings.lastPostedSlots || {};
+  const dueIndex = times.findIndex((time, index) => current.time >= time && settings.lastPostedSlots[current.date + ":" + (index + 1)] !== true);
+  if (dueIndex < 0) return;
+  const slotNumber = dueIndex + 1;
+  const slotKey = current.date + ":" + slotNumber;
   postingNow = true;
   try {
-    const result = await sendDailyPost(settings.chatId);
+    const result = await sendDailyPost(settings.chatId, slotNumber);
+    settings.lastPostedSlots[slotKey] = true;
     settings.lastPostedDate = current.date;
     saveSettings();
-    console.log("Daily post sent:", current.date, result.topic, "image:", result.image);
+    console.log("Scheduled post sent:", current.date, "slot:", slotNumber, result.topic, "image:", result.image, "ai:", result.aiGenerated);
   } catch (error) {
-    console.error("Daily post failed; scheduler will retry:", error.message || error);
-  } finally {
-    postingNow = false;
-  }
+    console.error("Scheduled post failed; scheduler will retry:", error.message || error);
+  } finally { postingNow = false; }
 }
 
 bot.catch((error) => console.error("Telegram bot error:", error.message || error));
@@ -409,7 +432,9 @@ bot.catch((error) => console.error("Telegram bot error:", error.message || error
 (async () => {
   loadSettings();
   loadMediaLibrary();
-  if (!isValidTime(settings.time)) settings.time = "10:00";
+  if (!Array.isArray(settings.times) || !settings.times.length) settings.times = [...defaultSettings.times];
+  settings.times = settings.times.filter(isValidTime).slice(0, 3);
+  while (settings.times.length < 3) settings.times.push(["10:00", "15:00", "20:00"][settings.times.length]);
   try {
     await bot.api.setMyCommands(commandList);
   } catch (error) {
@@ -418,7 +443,7 @@ bot.catch((error) => console.error("Telegram bot error:", error.message || error
 
   // Start the scheduler before long polling: bot.start() remains pending while the bot runs.
   setInterval(() => { runSchedulerTick().catch((error) => console.error("Scheduler tick error:", error)); }, 15000);
-  console.log("Daily scheduler ready. Timezone: Asia/Baku; default time: " + settings.time);
+  console.log("Daily scheduler ready. Timezone: Asia/Baku; times: " + settings.times.join(", "));
   try {
     await bot.start({
       onStart: (info) => console.log("VYRA Telegram Bot started as @" + info.username)
