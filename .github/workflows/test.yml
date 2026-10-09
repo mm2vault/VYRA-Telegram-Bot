@@ -18,5 +18,7 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Check JavaScript syntax
+        run: node --check src/index.js && node --check src/automation.js
       - name: Run tests
         run: npm test
