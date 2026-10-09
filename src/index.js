@@ -103,7 +103,7 @@ const commandList = [
   { command: "rules", description: "Topluluk kurallarını gör" },
   { command: "id", description: "Telegram kullanıcı ve sohbet kimliğini gör" },
   { command: "ping", description: "Bot bağlantısını kontrol et" },
-  { command: "image", description: "Yönetici: AI görseli oluştur" },
+  { command: "image", description: "Yönetici: otomatik AI görseli oluştur" },
   { command: "autopost_on", description: "Yönetici: günlük paylaşımı aç ve bu grubu seç" },
   { command: "autopost_off", description: "Yönetici: günlük paylaşımı durdur" },
   { command: "autopost_status", description: "Yönetici: paylaşım durumunu gör" },
@@ -197,11 +197,11 @@ bot.callbackQuery("menu:rules", async (ctx) => {
 
 bot.command("image", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  const prompt = String(ctx.match || "").trim().slice(0, 500);
-  if (!prompt) return ctx.reply("Kullanım: /image mor neon teknoloji temalı bir VYRA görseli");
-  await ctx.reply("🎨 Görsel hazırlanıyor. Bu işlem biraz sürebilir...");
+  const suppliedBrief = String(ctx.match || "").trim().slice(0, 500);
+  const brief = suppliedBrief || "Bugün için özgün, mor neon temalı VYRA topluluk görseli tasarla. Teknoloji, yapay zekâ ve dijital yaratıcılık temasını kendin seç.";
+  await ctx.reply("✨ Gemini otomatik görsel fikrini ve ayrıntılı promptu hazırlıyor, ardından resmi üretiyor...");
   try {
-    await sendImage(ctx.chat.id, buildImagePrompt(prompt), "💜 VYRA • AI Görseli\n" + prompt.slice(0, 500));
+    await sendImage(ctx.chat.id, buildImagePrompt(brief), "💜 VYRA • Gemini AI Görseli\n" + (suppliedBrief || "Gemini bugünün görsel fikrini kendi seçti."));
   } catch (error) {
     console.error("Manual image generation failed:", error.message || error);
     await ctx.reply("❌ Görsel oluşturulamadı.\n" + (error.message || "Bilinmeyen hata"));
