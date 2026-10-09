@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const fs = require("node:fs");
 const path = require("node:path");
-const { Bot, InlineKeyboard, InputFile } = require("grammy");
+const { Bot, InlineKeyboard } = require("grammy");
 const { getDailyContent, isValidTime, getBakuDateTime } = require("./automation");
 
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -292,7 +292,8 @@ bot.command("autopost_on", async (ctx) => {
   saveSettings();
   await ctx.reply(
     "💜 Günlük otomatik paylaşım AÇIK!\n\n" +
-    "🎨 İçerik: teknoloji, yapay zekâ, dijital ipuçları ve VYRA\n" +
+    "🖼️ Görsel havuzundaki fotoğraf sırayla seçilir.\n" +
+    "✍️ Her gönderiye VYRA hakkında hazır bir metin eklenir.\n" +
     "🕒 Saat: " + settings.time + " (Bakü saati)\n" +
     "📍 Hedef: " + (settings.targetTitle || settings.chatId) + "\n\n" +
     "Test için /autopost_test yaz."
@@ -337,7 +338,7 @@ bot.command("autopost_test", async (ctx) => {
     const result = await sendDailyPost(ctx.chat.id);
     await ctx.reply(result.image
       ? "✅ Test başarılı: görsel ve açıklama gönderildi. Konu: " + result.topic
-      : "⚠️ Metin paylaşımı gönderildi fakat görsel üretimi başarısız oldu. API anahtarını ve servis yanıtını kontrol et.");
+      : "⚠️ Metin gönderildi; görsel havuzu boş. Bota özel mesajdan fotoğraf gönderip yeniden dene.");
   } catch (error) {
     console.error("Auto-post test failed:", error.message || error);
     await ctx.reply("❌ Test başarısız: " + (error.message || "Bilinmeyen hata"));
