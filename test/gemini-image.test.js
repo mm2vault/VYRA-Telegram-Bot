@@ -36,12 +36,37 @@ test("Gemini automatically creates a detailed prompt then returns generated imag
   assert.equal(calls[1].body.response_format.type, "image");
 });
 
-test("Gemini prompt generation returns only the prompt text", async () => {
+test("Gemini prompt generation returns text from output_text", async () => {
   const prompt = await generateImagePrompt("VYRA AI news visual", {
     apiKey: "test-key",
     fetchImpl: async () => mockResponse({ data: { output_text: "  Crisp neon AI artwork  " } })
   });
   assert.equal(prompt, "Crisp neon AI artwork");
+});
+
+test("Gemini prompt generation reads text from Interactions API output parts", async () => {
+  const prompt = await generateImagePrompt("VYRA AI news visual", {
+    apiKey: "test-key",
+    fetchImpl: async () => mockResponse({
+      data: { output: [{ type: "message", content: [{ type: "text", text: "  Purple neon VYRA poster  " }] }] }
+    })
+  });
+  assert.equal(prompt, "Purple neon VYRA poster");
+});
+
+test("Empty prompt response falls back to a detailed VYRA image prompt", async () => {
+  let calls = 0;
+  const result = await generateImageBuffer("VYRA teknoloji posteri", {
+    apiKey: "test-key",
+    fetchImpl: async (_url, init) => {
+      calls += 1;
+      const body = JSON.parse(init.body);
+      if (body.model === PROMPT_MODEL) return mockResponse({ data: { output: [] } });
+      return mockResponse({ data: { output_image: { data: Buffer.from("image-bytes").toString("base64") } } });
+    }
+  });
+  assert.deepEqual(result, Buffer.from("image-bytes"));
+  assert.equal(calls, 2);
 });
 
 test("Gemini image generator fails clearly when API key is missing", async () => {
