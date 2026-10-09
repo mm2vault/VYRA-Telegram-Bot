@@ -1,13 +1,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { generateImageBuffer, generateImagePrompt, DEFAULT_MODEL, PROMPT_MODEL } = require("../src/gemini-image");
+const { generateImageBuffer, generateImagePrompt, DEFAULT_MODEL, PROMPT_MODEL, HF_DEFAULT_MODEL } = require("../src/gemini-image");
 
 function mockResponse({ ok = true, status = 200, data, text = "" } = {}) {
   return {
     ok,
     status,
     async json() { return data; },
-    async text() { return text; }
+    async text() { return text; },
+    async arrayBuffer() { return Buffer.from(data || "").buffer.slice(Buffer.from(data || "").byteOffset, Buffer.from(data || "").byteOffset + Buffer.from(data || "").byteLength); },
+    headers: { get(name) { return name.toLowerCase() === "content-type" ? "image/png" : null; } }
   };
 }
 
@@ -100,6 +102,61 @@ test("Gemini extracts image data from nested output content", async () => {
     })
   });
   assert.deepEqual(result, bytes);
+});
+
+
+test("Hugging Face free-tier provider can generate an image without a Gemini key", async () => {
+  const imageBytes = Buffer.from("fake-hf-image");
+  let request;
+  const result = await generateImageBuffer("VYRA mor neon posteri", {
+    hfToken: "hf-test-token",
+    fetchImpl: async (url, init) => {
+      request = { url, init, body: JSON.parse(init.body) };
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => "image/png" },
+        async arrayBuffer() {
+          return imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength);
+        },
+        async text() { return ""; }
+      };
+    }
+  });
+  assert.deepEqual(result, imageBytes);
+  assert.equal(request.url, "https://router.huggingface.co/hf-inference/models/" + HF_DEFAULT_MODEL);
+  assert.equal(request.init.headers.Authorization, "Bearer hf-test-token");
+  assert.match(request.body.inputs, /premium, original VYRA social-media artwork/i);
+});
+
+test("Gemini rate limit falls back to Hugging Face when HF_TOKEN is configured", async () => {
+  const imageBytes = Buffer.from("fallback-hf-image");
+  let calls = 0;
+  const result = await generateImageBuffer("VYRA purple neon", {
+    apiKey: "test-gemini-key",
+    hfToken: "hf-test-token",
+    fetchImpl: async (url, init) => {
+      calls += 1;
+      const body = JSON.parse(init.body);
+      if (body.model === PROMPT_MODEL) {
+        return mockResponse({ data: { output_text: "Purple neon VYRA artwork" } });
+      }
+      if (url.includes("generativelanguage.googleapis.com")) {
+        return mockResponse({ ok: false, status: 429, text: "limit: 0 input tokens per minute" });
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => "image/png" },
+        async arrayBuffer() {
+          return imageBytes.buffer.slice(imageBytes.byteOffset, imageBytes.byteOffset + imageBytes.byteLength);
+        },
+        async text() { return ""; }
+      };
+    }
+  });
+  assert.deepEqual(result, imageBytes);
+  assert.equal(calls, 3);
 });
 
 test("Gemini image generator fails clearly when API key is missing", async () => {
