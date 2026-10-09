@@ -26,7 +26,7 @@ Hosting platformunun Environment/Secrets bölümünde ayarla. Bot token'ını as
 - `TELEGRAM_ADMIN_IDS` — Özel sohbetten yönetici komutlarını kullanabilecek sayısal Telegram kullanıcı ID'leri; virgülle ayrılabilir. Önerilen değer: kendi kullanıcı ID'n.
 - `AUTO_POST_TIMES` — Üç paylaşım saati virgülle ayrılır; varsayılan `10:00,15:00,20:00` (Bakü saati).
 - `GEMINI_API_KEY` — AI metin üretimi ve soru-cevap için isteğe bağlı Gemini API anahtarı. Anahtarı GitHub’a veya sohbete koyma.
-- `GEMINI_MODEL` — İsteğe bağlı model adı; varsayılan `gemini-2.5-flash`.
+- `GEMINI_MODEL` — İsteğe bağlı model adı; varsayılan `gemini-3.8-flash`.
 - `DATA_DIR` — JSON ayarları ve görsel havuzu için dizin. Varsayılan `./data`; Render Persistent Disk `/var/data` noktasına bağlandıysa `DATA_DIR=/var/data` ayarla.
 - `PORT` — İsteğe bağlı; hosting platformu genellikle kendisi ayarlar.
 
