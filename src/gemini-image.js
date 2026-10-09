@@ -1,5 +1,5 @@
 const DEFAULT_MODEL = "gemini-nano-banana-2.1";
-const PROMPT_MODEL = process.env.GEMINI_PROMPT_MODEL || "gemini-2.5-flash";
+const PROMPT_MODEL = process.env.GEMINI_PROMPT_MODEL || "gemini-3.8-flash";
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions";
 
 async function callGemini({ apiKey, model, input, responseFormat, fetchImpl }) {
