@@ -43,8 +43,33 @@ async function generateImagePrompt(brief, options = {}) {
     fetchImpl
   });
 
-  const prompt = typeof data?.output_text === "string" ? data.output_text.trim() : "";
-  if (!prompt) throw new Error("Gemini prompt modeli boş yanıt verdi.");
+  // Interactions API responses can expose text either as output_text or inside output[].
+  const outputParts = Array.isArray(data?.output)
+    ? data.output.flatMap((item) => {
+        if (typeof item?.text === "string") return [item.text];
+        if (Array.isArray(item?.content)) {
+          return item.content
+            .map((part) => typeof part?.text === "string" ? part.text : "")
+            .filter(Boolean);
+        }
+        return [];
+      })
+    : [];
+  const prompt = [
+    typeof data?.output_text === "string" ? data.output_text : "",
+    ...outputParts
+  ].join("\n").trim();
+
+  // Never abort image generation just because the prompt model returned an empty text field.
+  // Keep a strong VYRA style brief and let the image model produce the artwork directly.
+  if (!prompt) {
+    const fallbackBrief = String(brief || "original VYRA community art about technology and AI").trim();
+    return (
+      "Create a premium, original VYRA social-media artwork. Dark near-black background, vivid purple neon glow, subtle magenta accents, cinematic lighting, refined high-contrast composition, crisp details, modern technology and digital creativity atmosphere. " +
+      "Make the visual polished and suitable for an official community post. Avoid fake app screenshots, watermarks, clutter, and misspelled text. " +
+      "Visual concept: " + fallbackBrief
+    ).slice(0, 4000);
+  }
   return prompt.slice(0, 4000);
 }
 
