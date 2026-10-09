@@ -26,7 +26,7 @@ Set these in your hosting provider's Environment/Secrets settings. Never commit 
 - `TELEGRAM_ADMIN_IDS` — recommended; comma-separated numeric Telegram user IDs allowed to use admin features, including image generation and schedule controls. Without this, admin commands are denied to everyone.
 - `GEMINI_API_KEY` — required for AI image generation; create it in [Google AI Studio](https://aistudio.google.com/apikey). Keep it in hosting Environment/Secrets, never in GitHub.
 - `GEMINI_IMAGE_MODEL` — optional; defaults to `gemini-nano-banana-2.1` (Gemini native image-generation model).
-- `GEMINI_PROMPT_MODEL` — optional; defaults to `gemini-2.5-flash`, which automatically expands the topic into a detailed image prompt.
+- `GEMINI_PROMPT_MODEL` — optional; defaults to `gemini-3.8-flash`, which automatically expands the topic into a detailed image prompt.
 - `AUTO_POST_TIME` — optional default posting time in 24-hour `HH:MM`, Baku time; defaults to `10:00`.
 - `PORT` — optional; hosting platforms usually set this.
 
