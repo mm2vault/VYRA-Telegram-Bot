@@ -120,7 +120,7 @@ async function generateImageBuffer(brief, options = {}) {
           part?.data
         ]) : [])
       ];
-      imageData = candidates.find((value) => typeof value === "string" && value.length > 100);
+      imageData = candidates.find((value) => typeof value === "string" && value.length > 0);
       if (imageData) break;
     }
   }
