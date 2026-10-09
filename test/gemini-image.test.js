@@ -34,6 +34,7 @@ test("Gemini automatically creates a detailed prompt then returns generated imag
   assert.equal(calls[1].body.input, "Premium purple neon VYRA technology poster, cinematic lighting.");
   assert.equal(calls[1].init.headers["x-goog-api-key"], "test-key");
   assert.equal(calls[1].body.response_format.type, "image");
+  assert.equal(calls[1].body.response_format.mime_type, "image/jpeg");
 });
 
 test("Gemini prompt generation returns text from output_text", async () => {
