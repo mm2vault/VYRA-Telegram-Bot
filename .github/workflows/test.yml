@@ -19,6 +19,6 @@ jobs:
       - name: Install dependencies
         run: npm install
       - name: Check JavaScript syntax
-        run: node --check src/index.js && node --check src/automation.js
+        run: node --check src/index.js && node --check src/automation.js && node --check src/gemini-image.js
       - name: Run tests
         run: npm test
