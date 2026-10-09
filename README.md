@@ -27,7 +27,7 @@ Hosting platformunun Environment/Secrets bölümünde ayarla. Bot token'ını as
 - `AUTO_POST_TIMES` — Üç paylaşım saati virgülle ayrılır; varsayılan `10:00,15:00,20:00` (Bakü saati).
 - `GEMINI_API_KEY` — AI metin üretimi ve soru-cevap için isteğe bağlı Gemini API anahtarı. Anahtarı GitHub’a veya sohbete koyma.
 - `GEMINI_MODEL` — İsteğe bağlı model adı; varsayılan `gemini-2.5-flash`.
-- `PORT` — İsteğe bağlı; hosting platformu genellikle kendisi ayarlar.
+- `DATA_DIR` — JSON ayarları ve görsel havuzu için dizin. Varsayılan `./data`; Render Persistent Disk `/var/data` noktasına bağlandıysa `DATA_DIR=/var/data` ayarla.\n- `PORT` — İsteğe bağlı; hosting platformu genellikle kendisi ayarlar.
 
 ## İlk kurulum
 
@@ -58,11 +58,11 @@ Botu bir grup içinde `/autopost_on` ile başlatırsan o grup da hedef olarak se
 
 ## Görsel havuzu ve hosting notları
 
-Fotoğrafların kendisi tekrar indirilmez; bot Telegram'ın verdiği `file_id` değerini `data/media-library.json` dosyasına kaydeder. Bu, dosya boyutunu küçük tutar. Ancak Render gibi geçici dosya sistemine sahip hostlarda yeniden dağıtım veya yeniden başlatma sonrasında yerel JSON dosyaları kaybolabilir. Böyle bir durumda fotoğrafları bota yeniden göndermek ve `/autopost_target` / `/autopost_on` ayarlarını kontrol etmek gerekir. Kalıcı medya havuzu için kalıcı disk veya harici veritabanı gerekir.
+Fotoğrafların kendisi tekrar indirilmez; bot Telegram'ın verdiği `file_id` değerini `DATA_DIR` altındaki `media-library.json` dosyasına kaydeder. Ayarlar da aynı dizindeki `automation-settings.json` dosyasına yazılır. Kalıcılık için hosting sağlayıcısında disk bağla ve `DATA_DIR` değerini bu bağlama yoluna ayarla. Bu, dosya boyutunu küçük tutar. Ancak Render gibi geçici dosya sistemine sahip hostlarda yeniden dağıtım veya yeniden başlatma sonrasında yerel JSON dosyaları kaybolabilir. Böyle bir durumda fotoğrafları bota yeniden göndermek ve `/autopost_target` / `/autopost_on` ayarlarını kontrol etmek gerekir. Kalıcı medya havuzu için kalıcı disk veya harici veritabanı gerekir.
 
 Zamanlayıcı süreç çalışırken 15 saniyede bir kontrol eder; üç paylaşımı planlanan Bakü saatlerinde yapar. Gemini REST API ile metin üretimi ve API anahtarı başlığı kullanılır; anahtar URL’ye yazılmaz. AI yanıtları süre sınırı ve kullanıcı başına bekleme aralığıyla korunur. Ücretsiz hosting uykuya geçerse gönderi gecikebilir. Botun kanalda yönetici kalması gerekir.
 
-## Yerel çalıştırma
+## AI kurulumu\n\nGoogle AI Studio üzerinden Gemini API anahtarı oluştur ve anahtarı yalnızca hosting'in Environment/Secrets bölümüne `GEMINI_API_KEY` olarak kaydet. `GEMINI_MODEL` isteğe bağlıdır. Anahtar ayarlı değilse otomatik paylaşımlar hazır Türkçe metinlere geri döner; AI soru-cevap özelliği devre dışı kalır. Kullanım limitleri ve ücretlendirme Google hesabına/planına bağlıdır.\n\n## Yerel çalıştırma
 
 ```bash
 npm install
