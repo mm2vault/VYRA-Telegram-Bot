@@ -380,6 +380,66 @@ bot.on("message:new_chat_members", async (ctx) => {
   );
 });
 
+// AI answers only direct questions: private chat, reply to the bot, or explicit @mention.
+bot.on("message:text", async (ctx, next) => {
+  const text = String(ctx.message.text || "").trim();
+  if (!text || text.startsWith("/")) return next();
+  const botUsername = bot.botInfo?.username;
+  const isPrivate = ctx.chat.type === "private";
+  const isReplyToBot = ctx.message.reply_to_message?.from?.id === bot.botInfo?.id;
+  const isMention = botUsername ? text.toLowerCase().includes("@" + botUsername.toLowerCase()) : false;
+  if (!isPrivate && !isReplyToBot && !isMention) return next();
+
+  const key = ctx.chat.id + ":" + ctx.from.id;
+  const now = Date.now();
+  if (now - (aiCooldowns.get(key) || 0) < 8000) {
+    await ctx.reply("💜 Birkaç saniye bekle, sorularını sırayla yanıtlayayım.");
+    return;
+  }
+  aiCooldowns.set(key, now);
+  if (aiCooldowns.size > 3000) {
+    for (const [storedKey, timestamp] of aiCooldowns) {
+      if (now - timestamp > 60000) aiCooldowns.delete(storedKey);
+      if (aiCooldowns.size <= 2000) break;
+    }
+  }
+
+  if (!process.env.GEMINI_API_KEY) {
+    await ctx.reply("🤖 AI cevaplama şu an ayarlı değil. Yönetici Gemini API anahtarını hosting'in Secrets/Environment bölümüne eklemeli.");
+    return;
+  }
+  const question = botUsername
+    ? text.split(/\\s+/).filter((part) => part.toLowerCase() !== "@" + botUsername.toLowerCase()).join(" ").trim()
+    : text;
+  if (!question) {
+    await ctx.reply("💜 Sorunu da yaz, yardımcı olayım.");
+    return;
+  }
+  try {
+    await ctx.replyWithChatAction("typing");
+    const answer = await answerCommunityQuestion(question, { chatTitle: ctx.chat.title });
+    await ctx.reply(answer, { reply_to_message_id: ctx.message.message_id });
+  } catch (error) {
+    console.warn("AI community answer failed:", error.message || error);
+    await ctx.reply("⚠️ Şu an yanıt hazırlayamadım. Biraz sonra tekrar dene.");
+  }
+});
+
+bot.command("autopost_times", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  await ctx.reply("🕒 Günlük otomatik paylaşım saatleri (Bakü):\\n" +
+    settings.times.map((time, index) => (index + 1) + ". " + time).join("\\n") +
+    "\\n\\nSaat değiştirmek için /autopost_time 2 15:00 yaz.");
+});
+
+bot.command("ai_status", async (ctx) => {
+  if (!(await requireAdmin(ctx))) return;
+  await ctx.reply("🤖 VYRA AI durumu\\n\\n" +
+    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "tanımlı" : "tanımlı değil") + "\\n" +
+    "Model: " + (process.env.GEMINI_MODEL || "gemini-2.5-flash") + "\\n" +
+    "AI anahtarı hiçbir zaman bu komutta gösterilmez.");
+});
+
 // Lightweight flood protection for groups. The bot needs delete-message permission to remove messages.
 bot.on("message", async (ctx, next) => {
   const message = ctx.message;
