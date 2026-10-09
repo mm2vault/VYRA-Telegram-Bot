@@ -364,12 +364,13 @@ bot.catch((error) => console.error("Telegram bot error:", error.message || error
     console.warn("Could not set Telegram command menu:", error.message || error);
   }
 
+  // Start the scheduler before long polling: bot.start() remains pending while the bot runs.
+  setInterval(() => { runSchedulerTick().catch((error) => console.error("Scheduler tick error:", error)); }, 15000);
+  console.log("Daily scheduler ready. Timezone: Asia/Baku; default time: " + settings.time);
   try {
     await bot.start({
       onStart: (info) => console.log("VYRA Telegram Bot started as @" + info.username)
     });
-    setInterval(() => { runSchedulerTick().catch((error) => console.error("Scheduler tick error:", error)); }, 15000);
-    console.log("Daily scheduler ready. Timezone: Asia/Baku; default time: " + settings.time);
   } catch (error) {
     console.error("Failed to start Telegram bot:", error);
     process.exit(1);
