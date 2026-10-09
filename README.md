@@ -24,8 +24,10 @@ Set these in your hosting provider's Environment/Secrets settings. Never commit 
 
 - `TELEGRAM_BOT_TOKEN` — required; token from BotFather.
 - `TELEGRAM_ADMIN_IDS` — recommended; comma-separated numeric Telegram user IDs allowed to use admin features, including image generation and schedule controls. Without this, admin commands are denied to everyone.
-- `GEMINI_API_KEY` — required for AI image generation; create it in [Google AI Studio](https://aistudio.google.com/apikey). Keep it in hosting Environment/Secrets, never in GitHub.
+- `GEMINI_API_KEY` — optional if Hugging Face is configured; create it in [Google AI Studio](https://aistudio.google.com/apikey). Keep it in hosting Environment/Secrets, never in GitHub.
 - `GEMINI_IMAGE_MODEL` — optional; defaults to `gemini-nano-banana-2.1` (Gemini native image-generation model).
+- `HF_TOKEN` — optional fallback / alternative provider. Create a Hugging Face token with Inference Providers permission in [Hugging Face Settings](https://huggingface.co/settings/tokens). The free account currently includes $0.10/month of Inference Providers credits, which is limited and may change; it is not unlimited free generation. Keep the token in hosting Environment/Secrets, never in GitHub.
+- `HF_IMAGE_MODEL` — optional; defaults to `stabilityai/stable-diffusion-3-medium-diffusers` through Hugging Face's Inference Providers router.
 - `GEMINI_PROMPT_MODEL` — optional; defaults to `gemini-3.8-flash`, which expands the topic into a detailed image prompt. If this prompt model returns an empty response or is temporarily unavailable, the bot falls back to a built-in VYRA prompt and still attempts image generation (authentication errors remain visible).
 - `AUTO_POST_TIME` — optional default posting time in 24-hour `HH:MM`, Baku time; defaults to `10:00`.
 - `PORT` — optional; hosting platforms usually set this.
@@ -47,13 +49,13 @@ Daily posts rotate through a set of Turkish technology tips, AI reminders, digit
 - The bot uses Telegram long polling and must stay running for reliable 24/7 responses.
 - The schedule state is saved to `data/automation-settings.json`. Hosts with ephemeral filesystems may lose this file after a redeploy or restart; if that happens, run `/autopost_on` again in the target group.
 - Free hosting can sleep, restart or enforce usage limits. The scheduler checks every 15 seconds while the process is running, but no free host can guarantee that the bot is awake at the exact scheduled minute.
-- Gemini image generation needs a Google AI Studio API key. Free quota and pricing depend on model/account and may change; the bot reports Gemini errors and falls back to a text-only daily post if image generation fails.
+- Gemini image generation uses the Google AI Studio API when configured. If Gemini image generation fails and `HF_TOKEN` is configured, the bot automatically retries image generation through Hugging Face Inference Providers. Hugging Face free credits are small ($0.10/month at the time of writing), may change, and do not guarantee that every model is available to every account. Without either working provider, scheduled posts fall back to text.
 
 ## Local development and tests
 
 1. Install Node.js 20 or newer.
 2. Run `npm install`.
-3. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_IDS` and `GEMINI_API_KEY` in your local environment (do not commit a `.env` file).
+3. Set `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_IDS`, and either `GEMINI_API_KEY` or `HF_TOKEN` in your local environment (do not commit a `.env` file).
 4. Run `npm test` to test the schedule/content helpers.
 5. Run `npm start` to start the bot.
 
