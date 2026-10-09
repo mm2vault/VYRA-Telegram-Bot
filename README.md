@@ -16,7 +16,7 @@ Node.js ve grammY ile hazırlanmış Türkçe VYRA topluluk botu. Yönetici kend
 - Günlük otomatik paylaşımı aç/kapat, durumunu gör ve Bakü saatine göre zamanla
 - `/autopost_test` ile gönderiyi dene
 - `/health` ve kök health endpoint'i
-- API anahtarı veya AI görsel üretim servisi gerektirmez
+- Görsel üretimi için AI API'si gerekmez; dinamik metin ve soru-cevap için `GEMINI_API_KEY` isteğe bağlıdır
 
 ## Environment değişkenleri
 
