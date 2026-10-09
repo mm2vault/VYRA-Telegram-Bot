@@ -22,7 +22,8 @@ const adminIds = new Set(
     .filter(Boolean)
 );
 const recentMessages = new Map();
-const settingsPath = path.join(process.cwd(), "data", "automation-settings.json");
+const dataDir = process.env.DATA_DIR || path.join(process.cwd(), "data");
+const settingsPath = path.join(dataDir, "automation-settings.json");
 const defaultSettings = {
   enabled: false,
   chatId: null,
@@ -81,7 +82,7 @@ function saveSettings() {
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2), { mode: 0o600 });
 }
 
-const mediaLibraryPath = path.join(process.cwd(), "data", "media-library.json");
+const mediaLibraryPath = path.join(dataDir, "media-library.json");
 let mediaLibrary = { nextIndex: 0, items: [] };
 
 function loadMediaLibrary() {
