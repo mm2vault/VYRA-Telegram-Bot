@@ -307,7 +307,7 @@ bot.command("autopost_on", async (ctx) => {
   await ctx.reply(
     "💜 Günlük otomatik paylaşım AÇIK!\n\n" +
     "🖼️ Görsel havuzundaki fotoğraf sırayla seçilir.\n" +
-    "✍️ Her gönderiye VYRA hakkında hazır bir metin eklenir.\n" +
+    "✍️ Her gönderiye AI ile üretilen VYRA metni eklenir (AI kapalıysa hazır metin).\n" +
     "🕒 Saatler: " + settings.times.join(", ") + " (Bakü saati)\n" +
     "📍 Hedef: " + (settings.targetTitle || settings.chatId) + "\n\n" +
     "Test için /autopost_test yaz."
@@ -427,16 +427,16 @@ bot.on("message:text", async (ctx, next) => {
 
 bot.command("autopost_times", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  await ctx.reply("🕒 Günlük otomatik paylaşım saatleri (Bakü):\\n" +
-    settings.times.map((time, index) => (index + 1) + ". " + time).join("\\n") +
-    "\\n\\nSaat değiştirmek için /autopost_time 2 15:00 yaz.");
+  await ctx.reply("🕒 Günlük otomatik paylaşım saatleri (Bakü):\n" +
+    settings.times.map((time, index) => (index + 1) + ". " + time).join("\n") +
+    "\n\nSaat değiştirmek için /autopost_time 2 15:00 yaz.");
 });
 
 bot.command("ai_status", async (ctx) => {
   if (!(await requireAdmin(ctx))) return;
-  await ctx.reply("🤖 VYRA AI durumu\\n\\n" +
-    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "tanımlı" : "tanımlı değil") + "\\n" +
-    "Model: " + (process.env.GEMINI_MODEL || "gemini-2.5-flash") + "\\n" +
+  await ctx.reply("🤖 VYRA AI durumu\n\n" +
+    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "tanımlı" : "tanımlı değil") + "\n" +
+    "Model: " + (process.env.GEMINI_MODEL || "gemini-2.5-flash") + "\n" +
     "AI anahtarı hiçbir zaman bu komutta gösterilmez.");
 });
 
