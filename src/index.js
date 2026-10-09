@@ -258,7 +258,8 @@ bot.command("autopost_status", async (ctx) => {
     "Saat: " + settings.time + " (Bakü saati)\n" +
     "Hedef sohbet: " + target + "\n" +
     "Son başarılı paylaşım: " + last + "\n" +
-    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "Yapılandırılmış" : "Eksik") + "\n\n" +
+    "Gemini API anahtarı: " + (process.env.GEMINI_API_KEY ? "Yapılandırılmış" : "Yok") + "\n" +
+    "Hugging Face yedeği: " + (process.env.HF_TOKEN ? "Yapılandırılmış" : "Kurulmadı") + "\n\n" +
     "Komutlar: /autopost_on, /autopost_off, /autopost_time 10:30, /autopost_test"
   );
 });
